@@ -7,6 +7,7 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.CountDownTimer
 import android.os.IBinder
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
@@ -28,7 +29,25 @@ class MainService : Service() {
     @Inject
     lateinit var counterManager: CounterManager
 
+    @Inject
+    lateinit var dao: CounterDao
+
     private lateinit var counterNotification: NotificationCompat.Builder
+
+
+    private val countInit = object : CountDownTimer(10000 * 60 * 60, 1000) {
+        override fun onTick(millisUntilFinished: Long) {
+            serviceScope.launch {
+                dao.insertCounter(Counter(10000, millisUntilFinished))
+            }
+        }
+
+        override fun onFinish() {
+            serviceScope.launch {
+                dao.insertCounter(Counter(10000, 0))
+            }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -58,13 +77,15 @@ class MainService : Service() {
             .build()
         startForeground(10458, notification)
 
+        countInit.start()
+
         serviceScope.launch {
             counterManager.counter.collect {
                 updateNotification(it)
             }
         }
 
-        return START_NOT_STICKY
+        return START_STICKY
     }
 
     private fun updateNotification(counter: Counter?) {
@@ -85,6 +106,7 @@ class MainService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        countInit.cancel()
         serviceScope.cancel()
     }
 }
